@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clock">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<title>ClickUp Clock</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Helvetica Neue", sans-serif;
+    --spring: cubic-bezier(.32,.72,0,1);
+    --bounce: cubic-bezier(.34,1.56,.64,1);
+
+    --base:#f2f2f7;
+    --blob1:rgba(120,150,255,.55); --blob2:rgba(255,140,200,.40); --blob3:rgba(120,220,255,.35);
+    --label:#000; --label2:rgba(60,60,67,.62); --label3:rgba(60,60,67,.32);
+    --sep:rgba(60,60,67,.16);
+    --fill:rgba(120,120,128,.12); --fill-strong:rgba(120,120,128,.2);
+    --glass:rgba(255,255,255,.58); --glass-strong:rgba(255,255,255,.78);
+    --glass-edge:rgba(255,255,255,.75); --glass-shadow:rgba(20,30,80,.12);
+    --blue:#007aff; --red:#ff3b30; --green:#34c759;
+    --tint-blue:rgba(0,122,255,.14); --tint-red:rgba(255,59,48,.14);
+    --pill-hl:rgba(255,255,255,.85);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --base:#000;
+      --blob1:rgba(70,60,200,.55); --blob2:rgba(190,50,130,.32); --blob3:rgba(20,110,170,.35);
+      --label:#fff; --label2:rgba(235,235,245,.6); --label3:rgba(235,235,245,.3);
+      --sep:rgba(84,84,88,.55);
+      --fill:rgba(120,120,128,.24); --fill-strong:rgba(120,120,128,.36);
+      --glass:rgba(40,40,50,.5); --glass-strong:rgba(44,44,56,.78);
+      --glass-edge:rgba(255,255,255,.16); --glass-shadow:rgba(0,0,0,.45);
+      --blue:#0a84ff; --red:#ff453a; --green:#30d158;
+      --tint-blue:rgba(10,132,255,.22); --tint-red:rgba(255,69,58,.22);
+      --pill-hl:rgba(255,255,255,.16);
+    }
+  }
+  *, *::before, *::after { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { background:var(--base); overscroll-behavior-y:none; -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; min-height:100vh; color:var(--label); font:400 17px/22px var(--font); letter-spacing:-.022em;
+    -webkit-font-smoothing:antialiased; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+    padding-bottom:calc(150px + env(safe-area-inset-bottom));
+  }
+  body::before {
+    content:""; position:fixed; inset:-20%; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(45% 35% at 15% 10%, var(--blob1), transparent 70%),
+      radial-gradient(45% 40% at 90% 40%, var(--blob2), transparent 70%),
+      radial-gradient(50% 40% at 30% 95%, var(--blob3), transparent 70%);
+    animation:drift 28s ease-in-out infinite alternate;
+  }
+  @keyframes drift { to { transform:translate3d(-4%,3%,0) scale(1.08); } }
+  button { font:inherit; letter-spacing:inherit; color:inherit; border:none; background:none; padding:0; cursor:pointer; }
+  svg { display:block; }
+  .ico { width:1em; height:1em; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .ico.f { fill:currentColor; stroke:none; }
+
+  /* ---------- glass ---------- */
+  .glass {
+    background:var(--glass); border:.5px solid var(--glass-edge);
+    -webkit-backdrop-filter:blur(28px) saturate(180%); backdrop-filter:blur(28px) saturate(180%);
+    box-shadow:0 8px 30px var(--glass-shadow), inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 rgba(255,255,255,.06);
+  }
+
+  /* ---------- nav bar ---------- */
+  #navbar { position:fixed; top:0; left:0; right:0; z-index:20; padding-top:env(safe-area-inset-top); transition:background .3s, box-shadow .3s; }
+  #navbar::before { content:""; position:absolute; inset:0; z-index:-1; opacity:0; transition:opacity .3s;
+    background:var(--glass); -webkit-backdrop-filter:blur(30px) saturate(180%); backdrop-filter:blur(30px) saturate(180%);
+    border-bottom:.5px solid var(--sep); }
+  #navbar.scrolled::before { opacity:1; }
+  .bar { height:52px; display:flex; align-items:center; justify-content:space-between; padding:0 16px; position:relative; }
+  #inline-title { position:absolute; left:64px; right:64px; text-align:center; font-weight:600; font-size:17px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; opacity:0; transform:translateY(6px); transition:opacity .25s, transform .35s var(--spring); pointer-events:none; }
+  #navbar.scrolled #inline-title { opacity:1; transform:none; }
+  .circle-btn { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; font-size:19px; color:var(--blue);
+    transition:transform .3s var(--spring), opacity .2s; }
+  .circle-btn:active { transform:scale(.88); }
+  #refresh { margin-left:auto; }
+  #refresh.spin .ico { animation:spin .9s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #back { position:absolute; left:8px; display:flex; align-items:center; gap:2px; height:40px; padding:0 14px 0 8px; border-radius:20px; color:var(--blue); font-size:17px;
+    opacity:0; pointer-events:none; transform:translateX(-8px); transition:opacity .25s, transform .4s var(--spring); }
+  #back.show { opacity:1; pointer-events:auto; transform:none; }
+  #back .ico { font-size:20px; stroke-width:2.6; }
+  #back:active { transform:scale(.94); }
+
+  /* ---------- content ---------- */
+  main { padding:calc(56px + env(safe-area-inset-top)) 16px 0; max-width:640px; margin:0 auto; }
+  #large-title { font-size:34px; line-height:41px; font-weight:700; letter-spacing:.37px; margin:4px 4px 10px; -webkit-user-select:text; }
+  #ptr { height:0; display:grid; place-items:center; overflow:hidden; color:var(--label2); }
+  #ptr .ico { font-size:22px; transition:transform .2s; }
+
+  .search { display:flex; align-items:center; gap:6px; height:40px; padding:0 12px; margin:0 0 16px; border-radius:14px; background:var(--fill);
+    color:var(--label2); transition:background .25s, box-shadow .25s; }
+  .search:focus-within { background:var(--fill-strong); box-shadow:0 0 0 2px var(--tint-blue); }
+  .search .ico { font-size:17px; flex:none; }
+  .search input { flex:1; min-width:0; height:100%; border:none; outline:none; background:none; color:var(--label); font:400 17px var(--font);
+    letter-spacing:-.022em; -webkit-user-select:text; user-select:text; -webkit-appearance:none; appearance:none; }
+  .search input::placeholder { color:var(--label2); }
+  .search input::-webkit-search-cancel-button { -webkit-appearance:none; }
+  .search .clear { width:20px; height:20px; border-radius:50%; background:var(--label3); color:var(--base); display:none; place-items:center; font-size:11px; }
+  .search.has .clear { display:grid; }
+
+  .seg { position:relative; display:flex; padding:2px; margin:0 0 20px; border-radius:11px; background:var(--fill); }
+  .seg i { position:absolute; top:2px; bottom:2px; left:2px; width:calc((100% - 4px) / 2); border-radius:9px; background:var(--pill-hl);
+    box-shadow:0 2px 8px rgba(0,0,0,.12), inset 0 .5px 0 var(--glass-edge); transition:transform .45s var(--spring); }
+  .seg[data-i="1"] i { transform:translateX(100%); }
+  .seg button { position:relative; flex:1; height:32px; font-size:14px; font-weight:600; letter-spacing:-.01em; color:var(--label); }
+
+  .sect-h { font-size:13px; line-height:18px; text-transform:uppercase; letter-spacing:-.01em; color:var(--label2); margin:22px 0 7px 16px; font-weight:400; }
+  #content > .sect-h:first-child, #content > .seg + .sect-h { margin-top:0; }
+  .grp { border-radius:22px; overflow:hidden; margin:0 0 4px; }
+  .row { position:relative; display:flex; align-items:center; gap:12px; padding:14px 14px 14px 16px; min-height:60px; transition:background .2s; }
+  .row + .row::before { content:""; position:absolute; top:0; left:16px; right:0; height:.5px; background:var(--sep); }
+  .row.tap:active { background:var(--fill); }
+  .row .body { flex:1; min-width:0; }
+  .row .t { font-size:17px; line-height:22px; font-weight:500; overflow-wrap:anywhere; }
+  .row .s { font-size:13px; line-height:18px; color:var(--label2); margin-top:1px; letter-spacing:-.006em; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+  .pill { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 9px; border-radius:11px; font-size:12px; font-weight:600;
+    background:var(--fill); color:var(--label); letter-spacing:0; white-space:nowrap; }
+  .pill.st { background:color-mix(in srgb, var(--c) 20%, transparent); }
+  .pill .d { width:6px; height:6px; border-radius:50%; background:var(--c, var(--label3)); }
+  .pill .ico { font-size:11px; }
+  .chev { color:var(--label3); font-size:15px; flex:none; }
+  .chev .ico { stroke-width:2.8; }
+
+  .go { flex:none; width:44px; height:44px; border-radius:50%; display:grid; place-items:center; font-size:16px;
+    background:var(--tint-blue); color:var(--blue); transition:transform .35s var(--bounce), background .25s, color .25s; }
+  .go:active { transform:scale(.86); }
+  .go.on { background:var(--red); color:#fff; animation:ring 2s ease-in-out infinite; }
+  @keyframes ring { 0%,100% { box-shadow:0 0 0 0 rgba(255,59,48,.45); } 50% { box-shadow:0 0 0 8px rgba(255,59,48,0); } }
+
+  .in .row:not(.swipe-fg), .in .swipe, .in .sect-h { animation:rowIn .6s var(--spring) backwards; animation-delay:calc(var(--i, 0) * 28ms); }
+  @keyframes rowIn { from { opacity:0; transform:translateY(14px) scale(.985); } }
+  .push { animation:push .5s var(--spring) both; }
+  @keyframes push { from { opacity:0; transform:translateX(36px); } }
+  .pop { animation:pop .5s var(--spring) both; }
+  @keyframes pop { from { opacity:0; transform:translateX(-36px); } }
+
+  /* swipe-to-hide rows */
+  .swipe { position:relative; overflow:hidden; touch-action:pan-y; transition:height .32s var(--spring), opacity .25s; }
+  .swipe + .swipe::before { content:""; position:absolute; top:0; left:16px; right:0; height:.5px; background:var(--sep); z-index:2; }
+  .swipe-fg { will-change:transform; }
+  .swipe-fg.snap, .swipe-act.snap { transition:transform .45s var(--spring), width .45s var(--spring); }
+  .swipe-act { position:absolute; right:0; top:0; bottom:0; width:0; overflow:hidden; white-space:nowrap; display:flex; align-items:center; justify-content:center;
+    background:var(--red); color:#fff; font-size:16px; font-weight:600; }
+  .swipe-act.unhide { background:var(--blue); }
+  .swipe.gone { height:0 !important; opacity:0; }
+  .swipe.dim .swipe-fg { opacity:.6; }
+  .linkbtn { display:block; margin:14px auto 0; padding:8px 16px; color:var(--blue); font-size:15px; font-weight:500; }
+  .skel { height:60px; position:relative; overflow:hidden; }
+  .skel + .skel { border-top:.5px solid var(--sep); }
+  .skel::after { content:""; position:absolute; inset:0; transform:translateX(-100%);
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent); animation:shimmer 1.4s infinite; }
+  @keyframes shimmer { to { transform:translateX(100%); } }
+  .empty { text-align:center; color:var(--label2); padding:64px 24px; font-size:15px; }
+  .empty .big { font-size:44px; margin-bottom:8px; color:var(--label3); display:grid; place-items:center; }
+  .empty .big .ico { stroke-width:1.5; }
+  .banner { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; margin:0 0 16px; border-radius:18px; font-size:15px; line-height:20px; }
+  .banner .ico { color:var(--red); font-size:20px; flex:none; }
+  .banner button { margin-left:auto; color:var(--blue); font-weight:600; }
+
+  /* settings form */
+  .field { display:flex; align-items:center; gap:12px; padding:0 16px; min-height:52px; }
+  .field + .field { border-top:.5px solid var(--sep); }
+  .field label { width:104px; flex:none; font-size:17px; }
+  .field input { flex:1; min-width:0; height:52px; border:none; outline:none; background:none; color:var(--label); text-align:right;
+    font:400 17px var(--font); letter-spacing:-.022em; -webkit-user-select:text; user-select:text; }
+  .field input::placeholder { color:var(--label3); }
+  .foot { font-size:13px; line-height:18px; color:var(--label2); margin:8px 16px 0; }
+  .act { display:flex; width:100%; align-items:center; justify-content:center; height:52px; font-size:17px; font-weight:600; color:var(--blue); transition:background .2s; }
+  .act:active { background:var(--fill); }
+  .act.danger { color:var(--red); font-weight:400; }
+  .act + .act { border-top:.5px solid var(--sep); }
+
+  /* ---------- floating tab bar ---------- */
+  #tabbar { position:fixed; z-index:30; left:50%; bottom:calc(14px + env(safe-area-inset-bottom)); width:min(calc(100% - 40px), 400px);
+    transform:translateX(-50%); height:64px; border-radius:32px; display:flex; padding:4px; }
+  #pill { position:absolute; top:4px; bottom:4px; left:4px; width:calc((100% - 8px) / 3); border-radius:28px; background:var(--pill-hl);
+    box-shadow:0 2px 10px rgba(0,0,0,.10), inset 0 .5px 0 var(--glass-edge); transition:transform .55s var(--spring); }
+  #tabbar[data-i="1"] #pill { transform:translateX(100%); }
+  #tabbar[data-i="2"] #pill { transform:translateX(200%); }
+  #tabbar button { position:relative; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    font-size:10px; font-weight:600; letter-spacing:.01em; color:var(--label2); transition:color .25s, transform .35s var(--spring); }
+  #tabbar button .ico { font-size:23px; }
+  #tabbar button.active { color:var(--blue); }
+  #tabbar button:active { transform:scale(.92); }
+
+  /* ---------- mini player ---------- */
+  #mini { position:fixed; z-index:29; left:50%; bottom:calc(88px + env(safe-area-inset-bottom)); width:min(calc(100% - 40px), 400px);
+    transform:translateX(-50%) translateY(30px) scale(.94); opacity:0; pointer-events:none; height:64px; border-radius:26px;
+    display:flex; align-items:center; gap:12px; padding:0 10px 0 18px; transition:transform .55s var(--spring), opacity .3s; }
+  #mini.show { transform:translateX(-50%); opacity:1; pointer-events:auto; }
+  #mini.show:active { transform:translateX(-50%) scale(.98); }
+  #mini .live { width:9px; height:9px; border-radius:50%; background:var(--green); flex:none; animation:pulse 1.6s ease-in-out infinite; box-shadow:0 0 10px var(--green); }
+  @keyframes pulse { 50% { opacity:.35; } }
+  #mini .txt { flex:1; min-width:0; }
+  #mini .n { font-size:15px; font-weight:600; line-height:19px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #mini .c { font-size:13px; line-height:17px; color:var(--label2); font-variant-numeric:tabular-nums; }
+  #mini .stop { width:44px; height:44px; border-radius:50%; background:var(--red); color:#fff; display:grid; place-items:center; font-size:15px;
+    transition:transform .3s var(--bounce); }
+  #mini .stop:active { transform:scale(.86); }
+
+  /* ---------- sheet ---------- */
+  #scrim { position:fixed; inset:0; z-index:40; background:rgba(0,0,0,.32); opacity:0; pointer-events:none; transition:opacity .35s; }
+  #scrim.show { opacity:1; pointer-events:auto; }
+  #sheet { position:fixed; z-index:41; left:0; right:0; bottom:0; margin:0 auto; max-width:640px; border-radius:34px 34px 0 0;
+    padding:8px 24px calc(28px + env(safe-area-inset-bottom)); text-align:center; transform:translateY(105%);
+    transition:transform .6s var(--spring); background:var(--glass-strong); }
+  #sheet.show { transform:none; }
+  #sheet.drag { transition:none; }
+  #sheet .grab { width:38px; height:5px; border-radius:3px; background:var(--label3); margin:0 auto 22px; }
+  #sheet .k { font-size:13px; text-transform:uppercase; color:var(--label2); letter-spacing:.04em; font-weight:600; display:flex; gap:8px; align-items:center; justify-content:center; }
+  #sheet .k::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--green); animation:pulse 1.6s infinite; }
+  #sheet .name { font-size:22px; line-height:28px; font-weight:700; letter-spacing:.35px; margin:10px 0 2px; overflow-wrap:anywhere; }
+  #sheet .sub { color:var(--label2); font-size:15px; }
+  #sheet .clock { font-size:68px; line-height:80px; font-weight:200; font-variant-numeric:tabular-nums; letter-spacing:-.02em; margin:18px 0 26px; }
+  #sheet .big { width:100%; height:54px; border-radius:27px; background:var(--red); color:#fff; font-size:17px; font-weight:600;
+    display:flex; align-items:center; justify-content:center; gap:8px; transition:transform .3s var(--bounce); }
+  #sheet .big:active { transform:scale(.97); }
+  #sheet .open { display:inline-block; margin-top:18px; color:var(--blue); font-size:15px; text-decoration:none; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition-duration:.01ms !important; } }
+</style>
+</head>
+<body>
+
+<div id="navbar">
+  <div class="bar">
+    <button id="back" aria-label="Back"><svg class="ico" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><span id="back-l">Spaces</span></button>
+    <div id="inline-title"></div>
+    <button id="refresh" class="circle-btn glass" aria-label="Refresh"><svg class="ico" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button>
+  </div>
+</div>
+
+<main id="main">
+  <div id="ptr"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg></div>
+  <h1 id="large-title">My Tasks</h1>
+  <div id="searchwrap" class="search">
+    <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input type="search" id="q" placeholder="Search" autocomplete="off" autocorrect="off" autocapitalize="off" enterkeyhint="search">
+    <button class="clear" id="clear-q" aria-label="Clear"><svg class="ico" viewBox="0 0 24 24" style="stroke-width:3.2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div id="content"></div>
+</main>
+
+<div id="mini" class="glass" role="button" aria-label="Open timer">
+  <span class="live"></span>
+  <div class="txt"><div class="n" id="mn"></div><div class="c" id="mc">0:00:00</div></div>
+  <button class="stop" id="mstop" aria-label="Stop timer"><svg class="ico f" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg></button>
+</div>
+
+<nav id="tabbar" class="glass" data-i="0">
+  <div id="pill"></div>
+  <button data-tab="tasks" class="active"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>Tasks</button>
+  <button data-tab="browse"><svg class="ico" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>Spaces</button>
+  <button data-tab="settings"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg>Settings</button>
+</nav>
+
+<div id="scrim"></div>
+<div id="sheet" class="glass" role="dialog" aria-label="Timer">
+  <div class="grab"></div>
+  <div class="k">Now tracking</div>
+  <div class="name" id="sn"></div>
+  <div class="sub" id="ss"></div>
+  <div class="clock" id="sc">0:00:00</div>
+  <button class="big" id="sstop"><svg class="ico f" viewBox="0 0 24 24" style="font-size:16px"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>Stop Timer</button>
+  <a class="open" id="so" href="#" target="_blank" rel="noopener">Open in ClickUp</a>
+</div>
+
+<script>
+"use strict";
+const API = "https://api.clickup.com/api/v2";
+const DEFAULTS = { token:"", teamId:"", listId:"" };
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const buzz = n => { try { navigator.vibrate && navigator.vibrate(n || 8); } catch {} };
+
+let cfg = { ...DEFAULTS };
+try { Object.assign(cfg, JSON.parse(localStorage.getItem("cu_cfg") || "{}")); } catch {}
+const saveCfg = () => { try { localStorage.setItem("cu_cfg", JSON.stringify(cfg)); } catch {} };
+
+let hidden = new Set();
+try { hidden = new Set(JSON.parse(localStorage.getItem("cu_hidden") || "[]")); } catch {}
+const saveHidden = () => { try { localStorage.setItem("cu_hidden", JSON.stringify([...hidden])); } catch {} };
+
+const TABS = ["tasks", "browse", "settings"];
+const S = {
+  tab: "tasks", mineTasks: false, me: null, tasks: null, spaces: null, lists: {}, current: null,
+  browse: { space: null, list: null, tasks: null, mineOnly: false }, showHidden: false, err: "",
+};
+
+/* ---------- icons ---------- */
+const I = {
+  play: `<svg class="ico f" viewBox="0 0 24 24"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2z"/></svg>`,
+  stop: `<svg class="ico f" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>`,
+  chev: `<svg class="ico" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>`,
+  clock: `<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
+  cal: `<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>`,
+  warn: `<svg class="ico" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.1"/></svg>`,
+  tray: `<svg class="ico" viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 13h5a4 4 0 0 0 8 0h5"/></svg>`,
+  key: `<svg class="ico" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg>`,
+};
+
+/* ---------- api ---------- */
+// ClickUp rejects bursts of requests, so calls go through a queue with a small gap between them.
+let lastCall = 0, queue = Promise.resolve();
+const paced = () => (queue = queue.then(async () => {
+  const wait = lastCall + 550 - Date.now();
+  if (wait > 0) await new Promise(res => setTimeout(res, wait));
+  lastCall = Date.now();
+}));
+async function api(path, opts = {}) {
+  for (let attempt = 0; ; attempt++) {
+    await paced();
+    const r = await fetch(API + path, {
+      ...opts,
+      headers: { Authorization: cfg.token, "Content-Type": "application/json", ...(opts.headers || {}) },
+    });
+    let body = null;
+    try { body = await r.json(); } catch {}
+    if (r.status === 429 && attempt < 4) { await new Promise(res => setTimeout(res, [2000, 4000, 8000, 15000][attempt])); continue; }
+    if (!r.ok) throw new Error(body?.err || `ClickUp error ${r.status}`);
+    return body;
+  }
+}
+
+/* ---------- data ---------- */
+async function loadMe() {
+  if (!S.me) S.me = (await api("/user")).user;
+  return S.me;
+}
+async function fetchListTasks(listId, mineOnly) {
+  const me = await loadMe();
+  let out = [];
+  for (let page = 0; page < 10; page++) {
+    const qs = `?page=${page}&subtasks=true&include_closed=false` + (mineOnly ? `&assignees[]=${me.id}` : "");
+    const res = await api(`/list/${listId}/task${qs}`);
+    out = out.concat(res.tasks);
+    if (res.tasks.length < 100 || res.last_page) break;
+  }
+  return out;
+}
+// Workspace is auto-detected from the token when not set; the task list accepts a ClickUp link or a bare ID.
+const idFrom = v => (String(v || "").match(/\d{6,}(?!.*\d{6,})/) || [""])[0];
+async function ensureTeam() {
+  if (cfg.teamId) return;
+  const teams = (await api("/team")).teams;
+  if (!teams.length) throw new Error("No ClickUp workspace found for this token");
+  cfg.teamId = String(teams[0].id); saveCfg();
+}
+const loadTasks = async () => {
+  if (!cfg.listId) { S.tasks = []; return; } S.tasks = await fetchListTasks(cfg.listId, S.mineTasks);
+};
+async function loadSpaces() {
+  const sp = (await api(`/team/${cfg.teamId}/space?archived=false`)).spaces;
+  S.spaces = sp.map(x => ({ id:x.id, name:x.name })).sort((a, b) => a.name.localeCompare(b.name));
+  try { localStorage.setItem("cu_spaces", JSON.stringify(S.spaces)); } catch {}
+}
+async function loadSpaceLists(sp) {
+  const folders = await api(`/space/${sp.id}/folder?archived=false`);
+  const lists = await api(`/space/${sp.id}/list?archived=false`);
+  S.lists[sp.id] = {
+    loose: lists.lists.map(l => ({ id:l.id, name:l.name, folder:"" })),
+    folders: folders.folders.map(f => ({ name:f.name, rows:f.lists.map(l => ({ id:l.id, name:l.name, folder:f.name })) })).filter(f => f.rows.length),
+  };
+}
+async function loadCurrent() {
+  try {
+    const d = (await api(`/team/${cfg.teamId}/time_entries/current`)).data;
+    S.current = d && d.id && d.task && d.task.id ? { id:d.id, start:+d.start, taskId:d.task.id, name:d.task.name || "(task)" } : null;
+  } catch { /* best-effort */ }
+  syncTimerUI();
+}
+async function startTimer(task) {
+  buzz(12);
+  try {
+    await api(`/team/${cfg.teamId}/time_entries/start`, { method:"POST", body:JSON.stringify({ tid:task.id }) });
+    S.current = { id:"", start:Date.now(), taskId:task.id, name:task.name };
+    S.err = "";
+    render();
+    loadCurrent();
+  } catch (e) { S.err = e.message; render(); }
+}
+async function stopTimer() {
+  buzz([10, 40, 10]);
+  closeSheet();
+  try {
+    await api(`/team/${cfg.teamId}/time_entries/stop`, { method:"POST" });
+    S.current = null; S.err = "";
+    render();
+    if (S.tab === "tasks") await loadTasks();
+    else if (S.browse.list) S.browse.tasks = await fetchListTasks(S.browse.list.id, S.browse.mineOnly);
+  } catch (e) { S.err = e.message; }
+  render();
+}
+
+/* ---------- helpers ---------- */
+const fmtClock = ms => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+};
+const fmtDur = ms => { const m = Math.round(ms / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`; };
+const fmtDue = ms => new Date(+ms).toLocaleDateString(undefined, { month:"short", day:"numeric" });
+const findTask = id => (S.tasks || []).concat(S.browse.tasks || []).find(t => t.id === id);
+
+function sectionsFor(tasks, q) {
+  const byId = new Map(tasks.map(t => [t.id, t]));
+  const kids = new Map(), top = [];
+  tasks.forEach(t => {
+    if (t.parent) {
+      const p = byId.get(t.parent), key = p ? p.id : "_";
+      if (!kids.has(key)) kids.set(key, { title:p ? p.name : "Subtasks", rows:[] });
+      kids.get(key).rows.push(t);
+    } else top.push(t);
+  });
+  const secs = [...kids.values()];
+  if (top.length) secs.push({ title:secs.length ? "Parent tasks" : "", rows:top });
+  if (!q) return secs;
+  const hit = t => t.name.toLowerCase().includes(q) || (t.status?.status || "").toLowerCase().includes(q);
+  return secs.map(s => s.title.toLowerCase().includes(q) ? s : { ...s, rows:s.rows.filter(hit) }).filter(s => s.rows.length);
+}
+
+function taskRow(t, i) {
+  const on = S.current?.taskId === t.id, spent = +t.time_spent || 0, c = t.status?.color || "#8e8e93";
+  return `<div class="row" style="--i:${Math.min(i, 12)}">
+    <div class="body">
+      <div class="t">${esc(t.name)}</div>
+      <div class="chips">
+        ${t.status ? `<span class="pill st" style="--c:${esc(c)}"><span class="d"></span>${esc(t.status.status)}</span>` : ""}
+        ${t.due_date ? `<span class="pill">${I.cal}${fmtDue(t.due_date)}</span>` : ""}
+        ${spent ? `<span class="pill">${I.clock}${fmtDur(spent)}</span>` : ""}
+      </div>
+    </div>
+    <button class="go ${on ? "on" : ""}" data-task="${esc(t.id)}" aria-label="${on ? "Stop" : "Start"} timer">${on ? I.stop : I.play}</button>
+  </div>`;
+}
+function taskSections(tasks, q) {
+  const secs = sectionsFor(tasks, q);
+  if (!secs.length) return `<div class="empty"><div class="big">${I.tray}</div>No tasks found</div>`;
+  let n = 0;
+  return secs.map(s => `${s.title ? `<div class="sect-h" style="--i:${Math.min(n, 12)}">${esc(s.title)}</div>` : ""}
+    <div class="grp glass">${s.rows.map(t => taskRow(t, n++)).join("")}</div>`).join("");
+}
+const spaceRow = (x, n, isHidden) => `<div class="swipe${isHidden ? " dim" : ""}" data-swipe="${esc(x.id)}" style="--i:${Math.min(n, 12)}">
+  <button class="swipe-act${isHidden ? " unhide" : ""}" data-hide="${esc(x.id)}">${isHidden ? "Show" : "Hide"}</button>
+  <div class="row tap swipe-fg" data-space="${esc(x.id)}"><div class="body"><div class="t">${esc(x.name)}</div></div><span class="chev">${I.chev}</span></div>
+</div>`;
+const seg = (i, a, b) => `<div class="seg" data-i="${i}"><i></i><button data-seg="0">${a}</button><button data-seg="1">${b}</button></div>`;
+const skeleton = () => `<div class="grp glass">${'<div class="skel"></div>'.repeat(5)}</div>`;
+
+/* ---------- render ---------- */
+let anim = "";               // "in" | "push" | "pop" – one-shot transition for the next render
+function setTitle(t) { $("#large-title").textContent = t; $("#inline-title").textContent = t; }
+
+function render() {
+  const q = $("#q").value.trim().toLowerCase();
+  const el = $("#content");
+  $("#tabbar").dataset.i = TABS.indexOf(S.tab);
+  document.querySelectorAll("#tabbar button").forEach(b => b.classList.toggle("active", b.dataset.tab === S.tab));
+  const showSearch = S.tab !== "settings" && !!cfg.token;
+  $("#searchwrap").style.display = showSearch ? "" : "none";
+  $("#refresh").style.display = S.tab === "settings" || !cfg.token ? "none" : "";
+  $("#searchwrap").classList.toggle("has", !!$("#q").value);
+  const inSub = S.tab === "browse" && !!S.browse.space;
+  $("#back").classList.toggle("show", inSub);
+  $("#back-l").textContent = S.browse.list ? S.browse.space.name : "Spaces";
+
+  const err = S.err ? `<div class="banner glass">${I.warn}<div>${esc(S.err)}</div><button id="dismiss">OK</button></div>` : "";
+  let html = "";
+
+  if (S.tab === "settings") {
+    setTitle("Settings");
+    html = `${err}
+      ${S.me ? `<div class="sect-h">Account</div><div class="grp glass"><div class="row"><div class="body"><div class="t">${esc(S.me.username)}</div><div class="s">${esc(S.me.email || "")}</div></div></div></div>` : ""}
+      <div class="sect-h">ClickUp</div>
+      <div class="grp glass">
+        <div class="field"><label for="f_token">API Token</label><input type="password" id="f_token" value="${esc(cfg.token)}" placeholder="pk_…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+        <div class="field"><label for="f_team">Workspace</label><input type="text" id="f_team" value="${esc(cfg.teamId)}" placeholder="Auto-detected" inputmode="numeric"></div>
+        <div class="field"><label for="f_list">Task List</label><input type="text" id="f_list" value="${esc(cfg.listId)}" placeholder="Paste list link or ID" inputmode="url" autocapitalize="off" spellcheck="false"></div>
+      </div>
+      <div class="foot">Find your token in ClickUp under your avatar → Settings → Apps. It’s stored only on this device.</div>
+      <div class="grp glass" style="margin-top:24px"><button class="act" id="save">Save &amp; Connect</button>${cfg.token ? `<button class="act danger" id="forget">Forget Token</button>` : ""}</div>`;
+  } else if (!cfg.token) {
+    setTitle("ClickUp Clock");
+    html = `<div class="empty"><div class="big">${I.key}</div>Add your ClickUp API token in Settings to get started.</div>`;
+  } else if (S.tab === "tasks") {
+    setTitle("My Tasks");
+    $("#q").placeholder = "Search tasks";
+    html = !cfg.listId
+      ? err + `<div class="empty"><div class="big">${I.tray}</div>Choose your task list in Settings.<br>Paste the list’s ClickUp link.</div>`
+      : err + seg(S.mineTasks ? 1 : 0, "All", "Assigned to me") + (S.tasks ? taskSections(S.tasks, q) : skeleton());
+  } else if (S.browse.list) {
+    const b = S.browse;
+    setTitle(b.list.name);
+    $("#q").placeholder = "Search in list";
+    html = err + `<div style="margin:-4px 4px 14px;color:var(--label2);font-size:15px">${esc([b.space.name, b.list.folder].filter(Boolean).join(" › "))}</div>`
+      + seg(b.mineOnly ? 1 : 0, "All", "Assigned to me") + (b.tasks ? taskSections(b.tasks, q) : skeleton());
+  } else if (S.browse.space) {
+    const sp = S.browse.space, data = S.lists[sp.id];
+    setTitle(sp.name);
+    $("#q").placeholder = "Search lists";
+    if (!data) html = err + skeleton();
+    else {
+      const match = r => !q || r.name.toLowerCase().includes(q) || r.folder.toLowerCase().includes(q);
+      const groups = [{ title:data.folders.length ? "Lists" : "", rows:data.loose }, ...data.folders.map(f => ({ title:f.name, rows:f.rows }))]
+        .map(g => ({ ...g, rows:g.rows.filter(match) })).filter(g => g.rows.length);
+      let n = 0;
+      html = err + (groups.length ? groups.map(g => `${g.title ? `<div class="sect-h" style="--i:${Math.min(n, 12)}">${esc(g.title)}</div>` : ""}
+        <div class="grp glass">${g.rows.map(r => `
+          <div class="row tap" data-list="${esc(r.id)}" style="--i:${Math.min(n++, 12)}">
+            <div class="body"><div class="t">${esc(r.name)}</div></div><span class="chev">${I.chev}</span>
+          </div>`).join("")}</div>`).join("")
+        : `<div class="empty"><div class="big">${I.tray}</div>${data.loose.length || data.folders.length ? "Nothing matches" : "This space has no lists"}</div>`);
+    }
+  } else {
+    setTitle("Spaces");
+    $("#q").placeholder = "Search spaces";
+    if (!S.spaces) html = err + skeleton();
+    else {
+      const match = x => !q || x.name.toLowerCase().includes(q);
+      const vis = S.spaces.filter(x => !hidden.has(x.id) && match(x));
+      const hid = S.spaces.filter(x => hidden.has(x.id));
+      const grp = (rows, isHidden) => `<div class="grp glass">${rows.map((x, n) => spaceRow(x, n, isHidden)).join("")}</div>`;
+      html = err
+        + (vis.length ? grp(vis, false) : `<div class="empty"><div class="big">${I.tray}</div>${q ? "Nothing matches" : "All spaces are hidden"}</div>`)
+        + (!q && S.spaces.length && !hid.length ? `<div class="foot">Swipe left on a space to hide it.</div>` : "")
+        + (!q && hid.length ? `<button class="linkbtn" id="toggle-hidden">${S.showHidden ? "Hide" : "Show"} ${hid.length} hidden</button>` : "")
+        + (S.showHidden && hid.filter(match).length ? `<div class="sect-h">Hidden</div>${grp(hid.filter(match), true)}` : "");
+    }
+  }
+  el.className = anim;
+  el.innerHTML = html;
+  anim = "";
+  syncTimerUI();
+}
+
+/* ---------- timer UI ---------- */
+function syncTimerUI() {
+  const c = S.current;
+  $("#mini").classList.toggle("show", !!c);
+  if (!c) { closeSheet(); return; }
+  $("#mn").textContent = c.name;
+  $("#sn").textContent = c.name;
+  $("#ss").textContent = findTask(c.taskId)?.status?.status || "";
+  $("#so").href = `https://app.clickup.com/t/${encodeURIComponent(c.taskId)}`;
+  tick();
+}
+function tick() {
+  if (!S.current) return;
+  const t = fmtClock(Date.now() - S.current.start);
+  $("#mc").textContent = t; $("#sc").textContent = t;
+}
+setInterval(tick, 1000);
+function openSheet() { if (!S.current) return; $("#scrim").classList.add("show"); $("#sheet").classList.add("show"); }
+function closeSheet() { $("#scrim").classList.remove("show"); const s = $("#sheet"); s.classList.remove("show", "drag"); s.style.transform = ""; }
+
+/* ---------- actions ---------- */
+async function guard(fn) {
+  S.err = "";
+  try { await fn(); } catch (e) { S.err = e.message; }
+  render();
+}
+async function openTab(tab) {
+  if (tab === S.tab) { window.scrollTo({ top:0, behavior:"smooth" }); return; }
+  const dir = TABS.indexOf(tab) > TABS.indexOf(S.tab) ? "push" : "pop";
+  buzz(6);
+  S.tab = tab; $("#q").value = ""; S.err = ""; anim = dir; render();
+  window.scrollTo(0, 0);
+  if (!cfg.token || tab === "settings") return;
+  if (tab === "tasks" && !S.tasks) await guard(loadTasks);
+  if (tab === "browse" && !S.spaces) {
+    try { S.spaces = JSON.parse(localStorage.getItem("cu_spaces") || "null"); } catch {}
+    if (S.spaces) { render(); loadSpaces().then(render).catch(() => {}); }   // show cached spaces, refresh quietly
+    else await guard(loadSpaces);
+  }
+}
+async function openSpace(id) {
+  buzz(6);
+  S.browse = { space:S.spaces.find(x => x.id === id), list:null, tasks:null, mineOnly:false };
+  $("#q").value = ""; anim = "push"; render(); window.scrollTo(0, 0);
+  if (!S.lists[id]) await guard(() => loadSpaceLists(S.browse.space));
+}
+async function openList(id) {
+  buzz(6);
+  const d = S.lists[S.browse.space.id];
+  const list = d.loose.concat(...d.folders.map(f => f.rows)).find(x => x.id === id);
+  S.browse = { space:S.browse.space, list, tasks:null, mineOnly:false };
+  $("#q").value = ""; anim = "push"; render(); window.scrollTo(0, 0);
+  await guard(async () => { S.browse.tasks = await fetchListTasks(id, false); });
+}
+function leaveBrowse() {
+  const inList = !!S.browse.list;
+  S.browse = { space:inList ? S.browse.space : null, list:null, tasks:null, mineOnly:false };
+  $("#q").value = ""; anim = "pop"; render(); window.scrollTo(0, 0);
+}
+async function refresh() {
+  const btn = $("#refresh"); btn.classList.add("spin");
+  await guard(async () => {
+    loadCurrent();
+    if (S.tab === "tasks") await loadTasks();
+    else if (S.browse.list) S.browse.tasks = await fetchListTasks(S.browse.list.id, S.browse.mineOnly);
+    else if (S.browse.space) await loadSpaceLists(S.browse.space);
+    else await loadSpaces();
+  });
+  btn.classList.remove("spin");
+}
+async function setSeg(v) {
+  const mine = v === "1";
+  if (S.tab === "tasks") {
+    if (S.mineTasks === mine) return;
+    S.mineTasks = mine; S.tasks = null; render();
+    await guard(loadTasks);
+  } else if (S.browse.list) {
+    if (S.browse.mineOnly === mine) return;
+    S.browse.mineOnly = mine; S.browse.tasks = null; render();
+    await guard(async () => { S.browse.tasks = await fetchListTasks(S.browse.list.id, mine); });
+  }
+}
+
+let noClickUntil = 0, openSw = null;
+function toggleHide(id) {
+  buzz(10);
+  const w = document.querySelector(`[data-swipe="${CSS.escape(id)}"]`);
+  if (hidden.has(id)) hidden.delete(id); else hidden.add(id);
+  saveHidden(); openSw = null;
+  if (!w) return render();
+  w.style.height = w.offsetHeight + "px";           // collapse the row, then re-render
+  requestAnimationFrame(() => w.classList.add("gone"));
+  setTimeout(render, 320);
+}
+function setSw(w, v, snap) {
+  const fg = w.querySelector(".swipe-fg"), act = w.querySelector(".swipe-act");
+  fg.classList.toggle("snap", !!snap); act.classList.toggle("snap", !!snap);
+  fg.style.transform = v ? `translateX(${v}px)` : "";
+  act.style.width = Math.max(0, -v) + "px";
+}
+function closeSw() { if (openSw) { setSw(openSw, 0, true); openSw = null; } }
+
+(() => {
+  const W = 92;
+  let w = null, x0 = 0, y0 = 0, mode = null, base = 0, cur = 0, id = null;
+  document.addEventListener("pointerdown", e => {
+    const wrap = e.target.closest(".swipe");
+    if (openSw && openSw !== wrap) closeSw();
+    if (!wrap || e.target.closest(".swipe-act")) { w = null; return; }
+    w = wrap; x0 = e.clientX; y0 = e.clientY; mode = null; id = e.pointerId;
+    base = openSw === wrap ? -W : 0; cur = base;
+  });
+  document.addEventListener("pointermove", e => {
+    if (!w || e.pointerId !== id) return;
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    if (!mode) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.2) { mode = "h"; try { w.setPointerCapture(id); } catch {} }
+      else if (Math.abs(dy) > 8) { mode = "v"; w = null; return; }
+      else return;
+    }
+    let v = Math.min(0, base + dx);
+    if (v < -W) v = -W + (v + W) * .7;            // slight resistance past the button
+    cur = v; setSw(w, v, false);
+  });
+  const end = e => {
+    if (!w || mode !== "h" || e.pointerId !== id) { w = null; return; }
+    noClickUntil = Date.now() + 350;
+    const full = w.offsetWidth * .55, wrap = w; w = null;
+    if (e.type !== "pointercancel" && cur < -full) { toggleHide(wrap.dataset.swipe); }
+    else if (e.type !== "pointercancel" && cur < -W * .5) { setSw(wrap, -W, true); openSw = wrap; buzz(5); }
+    else { setSw(wrap, 0, true); if (openSw === wrap) openSw = null; }
+  };
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+})();
+
+document.addEventListener("click", e => {
+  if (Date.now() < noClickUntil) return;
+  if (openSw && !e.target.closest(".swipe-act")) return closeSw();
+  const t = e.target.closest("button, [data-list], [data-space], #mini, #scrim");
+  if (!t) return;
+  if (t.id === "scrim") return closeSheet();
+  if (t.id === "mstop" || t.id === "sstop") { e.stopPropagation(); return stopTimer(); }
+  if (t.id === "mini") return openSheet();
+  if (t.dataset.tab) return openTab(t.dataset.tab);
+  if (t.id === "refresh") return refresh();
+  if (t.id === "back") return leaveBrowse();
+  if (t.id === "dismiss") { S.err = ""; return render(); }
+  if (t.id === "clear-q") { $("#q").value = ""; render(); return $("#q").focus(); }
+  if (t.dataset.task) {
+    const id = t.dataset.task;
+    if (S.current?.taskId === id) return stopTimer();
+    const task = findTask(id);
+    return task && startTimer(task);
+  }
+  if (t.dataset.hide) return toggleHide(t.dataset.hide);
+  if (t.id === "toggle-hidden") { S.showHidden = !S.showHidden; return render(); }
+  if (t.dataset.space) return openSpace(t.dataset.space);
+  if (t.dataset.list) return openList(t.dataset.list);
+  if (t.dataset.seg !== undefined) return setSeg(t.dataset.seg);
+  if (t.id === "save") {
+    cfg.token = $("#f_token").value.trim();
+    cfg.teamId = idFrom($("#f_team").value);
+    cfg.listId = idFrom($("#f_list").value);
+    saveCfg(); S.me = S.tasks = S.spaces = S.current = null; S.lists = {}; S.browse = { space:null, list:null, tasks:null, mineOnly:false };
+    S.tab = "tasks"; anim = "push"; render(); return init();
+  }
+  if (t.id === "forget") { cfg.token = ""; saveCfg(); try { localStorage.removeItem("cu_spaces"); } catch {} S.me = S.tasks = S.spaces = S.current = null; S.lists = {}; render(); }
+});
+$("#q").addEventListener("input", () => render());
+$("#q").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+$("#mini").addEventListener("click", e => { if (!e.target.closest("#mstop")) openSheet(); });
+
+/* nav bar collapse on scroll */
+const onScroll = () => $("#navbar").classList.toggle("scrolled", window.scrollY > 38);
+window.addEventListener("scroll", onScroll, { passive:true });
+
+/* pull to refresh */
+(() => {
+  let y0 = null, dy = 0;
+  const ptr = $("#ptr");
+  window.addEventListener("touchstart", e => { if (window.scrollY <= 0 && !$("#sheet").classList.contains("show")) { y0 = e.touches[0].clientY; dy = 0; } }, { passive:true });
+  window.addEventListener("touchmove", e => {
+    if (y0 === null) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    if (dy <= 0) return;
+    const h = Math.min(dy * .45, 72);
+    ptr.style.transition = "none"; ptr.style.height = h + "px";
+    ptr.firstElementChild.style.transform = h > 56 ? "rotate(180deg)" : "";
+  }, { passive:true });
+  window.addEventListener("touchend", () => {
+    if (y0 === null) return;
+    const go = dy * .45 > 56;
+    y0 = null;
+    ptr.style.transition = "height .5s cubic-bezier(.32,.72,0,1)"; ptr.style.height = "0px";
+    ptr.firstElementChild.style.transform = "";
+    if (go) { buzz(10); refresh(); }
+  });
+})();
+
+/* sheet drag to dismiss */
+(() => {
+  const sheet = $("#sheet"); let y0 = null, dy = 0;
+  sheet.addEventListener("touchstart", e => { y0 = e.touches[0].clientY; dy = 0; sheet.classList.add("drag"); }, { passive:true });
+  sheet.addEventListener("touchmove", e => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); sheet.style.transform = `translateY(${dy}px)`; }, { passive:true });
+  sheet.addEventListener("touchend", () => {
+    if (y0 === null) return; y0 = null;
+    sheet.classList.remove("drag"); sheet.style.transform = "";
+    if (dy > 110) closeSheet();
+  });
+})();
+
+document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg.token) loadCurrent(); });
+
+async function init() {
+  onScroll();
+  if (!cfg.token) { S.tab = "settings"; return render(); }
+  anim = "in"; render();
+  await guard(async () => { await ensureTeam(); await loadTasks(); anim = "in"; });
+  await loadCurrent();
+  render();
+}
+init();
+</script>
+</body>
+</html>
